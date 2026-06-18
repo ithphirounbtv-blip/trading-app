@@ -1,0 +1,832 @@
+<!DOCTYPE html>
+<html lang="km">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>កម្មវិធីគ្រប់គ្រងការជួញដូរ | Trading Tracker Pro</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Khmer+OS+Battambang:wght@400;700&display=swap');
+        body { font-family: 'Khmer OS Battambang', sans-serif; background-color: #f8fafc; }
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: #f1f1f1; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+        
+        .clean-input {
+            width: 100%; background: transparent; border: 1px solid transparent;
+            padding: 4px 8px; border-radius: 4px; outline: none; transition: all 0.2s;
+        }
+        .clean-input:hover { border-color: #e2e8f0; background: #fff; }
+        .clean-input:focus { border-color: #6366f1; background: #fff; box-shadow: 0 0 0 2px rgba(99,102,241,0.1); }
+        textarea.clean-input { resize: none; overflow: hidden; min-height: 32px; line-height: 1.5; }
+        .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 50; align-items: center; justify-content: center; }
+        .modal.active { display: flex; }
+    </style>
+</head>
+<body class="text-slate-800">
+
+    <datalist id="entryModels">
+        <option value="Sn1P3r Order Flow"></option>
+        <option value="Sn1P3r FRVP Pro"></option>
+        <option value="CRT + TBS"></option>
+        <option value="SMT (XAU vs XAG)"></option>
+        <option value="ICT 2022 (MSS+FVG)"></option>
+        <option value="Silver Bullet"></option>
+        <option value="Judas Swing"></option>
+        <option value="Breaker Block"></option>
+        <option value="Volume Delta"></option>
+        <option value="BTrader Concept 2.0"></option>
+    </datalist>
+
+    <div id="loadingOverlay" class="fixed inset-0 bg-white/80 z-[60] flex items-center justify-center hidden">
+        <div class="flex flex-col items-center">
+            <i class="fas fa-circle-notch fa-spin text-4xl text-indigo-600 mb-4"></i>
+            <p class="text-slate-600 font-medium" id="loadingText">កំពុងទាញយកទិន្នន័យ...</p>
+        </div>
+    </div>
+
+    <div id="captureArea" class="container mx-auto p-2 sm:p-4 max-w-[1400px]">
+        
+        <header class="bg-white rounded-xl shadow-sm p-4 sm:p-6 mb-6 flex flex-col xl:flex-row justify-between items-start xl:items-center border border-slate-200 gap-4">
+            <div>
+                <h1 class="text-2xl font-bold text-indigo-700 flex items-center gap-2">
+                    <i class="fas fa-chart-pie text-indigo-500"></i> កំណត់ហេតុជួញដូរអាជីព (Trading Journal)
+                </h1>
+                <div class="flex flex-wrap items-center gap-3 mt-1.5">
+                    <p class="text-sm text-slate-500 flex items-center gap-2">
+                        <span id="syncStatus" class="inline-block w-2.5 h-2.5 rounded-full bg-yellow-400"></span>
+                        <span id="syncText">កំពុងភ្ជាប់...</span>
+                    </p>
+                    <button onclick="openSyncSettingsModal()" class="px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded text-xs font-semibold flex items-center gap-1 transition-all">
+                        <i class="fas fa-wifi text-[10px]"></i> 🔑 កំណត់ការ Sync ឧបករណ៍
+                    </button>
+                </div>
+                <p class="text-[11px] text-green-600 font-medium mt-1"><i class="fas fa-shield-check"></i> មានប្រព័ន្ធការពារទិន្នន័យ (Auto-Save)</p>
+            </div>
+            
+            <div class="grid grid-cols-2 md:grid-cols-3 gap-4 bg-slate-50 p-4 rounded-lg border border-slate-200 w-full xl:w-auto">
+                <div>
+                    <label class="block text-xs font-semibold text-slate-500 mb-1">ទំហំគណនី (Account Size)</label>
+                    <div class="flex items-center">
+                        <span class="text-slate-400 mr-1">$</span>
+                        <input type="number" id="globalAccountSize" value="10000" class="w-24 bg-transparent font-bold text-lg text-slate-800 focus:outline-none focus:border-b-2 focus:border-indigo-500" onchange="updateSettings()">
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-500 mb-1">R:R លំនាំដើម (Default)</label>
+                    <div class="flex items-center gap-1 font-bold text-lg text-slate-800">
+                        <span>1</span> : <input type="number" id="globalRR" value="1" step="0.1" class="w-16 bg-transparent focus:outline-none focus:border-b-2 focus:border-indigo-500" onchange="updateSettings()">
+                    </div>
+                </div>
+                <div class="col-span-2 md:col-span-1 border-t md:border-t-0 md:border-l border-slate-200 pt-3 md:pt-0 md:pl-4">
+                    <label class="block text-xs font-semibold text-slate-500 mb-1">តម្លៃ 1 Pip (1 Lot)</label>
+                    <div class="flex items-center">
+                         <span class="text-slate-400 mr-1">$</span>
+                         <input type="number" id="globalPipValue" value="10" step="0.1" class="w-16 bg-transparent font-bold text-lg text-slate-800 focus:outline-none focus:border-b-2 focus:border-indigo-500" onchange="updateSettings()">
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <div class="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
+            <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex flex-col sm:flex-row items-start sm:items-center gap-4">
+                <div class="w-10 h-10 sm:w-12 sm:h-12 shrink-0 rounded-full bg-green-100 text-green-600 flex items-center justify-center text-lg sm:text-xl"><i class="fas fa-trophy"></i></div>
+                <div><p class="text-xs font-semibold text-slate-500 uppercase">ឈ្នះសរុប (Wins)</p><p class="text-xl font-bold text-slate-800" id="statWins">0</p></div>
+            </div>
+            <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex flex-col sm:flex-row items-start sm:items-center gap-4">
+                <div class="w-10 h-10 sm:w-12 sm:h-12 shrink-0 rounded-full bg-red-100 text-red-600 flex items-center justify-center text-lg sm:text-xl"><i class="fas fa-times-circle"></i></div>
+                <div><p class="text-xs font-semibold text-slate-500 uppercase">ចាញ់សរុប (Losses)</p><p class="text-xl font-bold text-slate-800" id="statLosses">0</p></div>
+            </div>
+            <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex flex-col sm:flex-row items-start sm:items-center gap-4">
+                <div class="w-10 h-10 sm:w-12 sm:h-12 shrink-0 rounded-full bg-amber-100 text-amber-600 flex items-center justify-center text-lg sm:text-xl"><i class="fas fa-shield-alt"></i></div>
+                <div><p class="text-xs font-semibold text-slate-500 uppercase">រួចខ្លួន (BE)</p><p class="text-xl font-bold text-slate-800" id="statBE">0</p></div>
+            </div>
+            <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex flex-col sm:flex-row items-start sm:items-center gap-4">
+                <div class="w-10 h-10 sm:w-12 sm:h-12 shrink-0 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-lg sm:text-xl"><i class="fas fa-bullseye"></i></div>
+                <div><p class="text-xs font-semibold text-slate-500 uppercase">អត្រាឈ្នះ (Win Rate)</p><p class="text-xl font-bold text-slate-800" id="statWinRate">0%</p></div>
+            </div>
+            <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex flex-col sm:flex-row items-start sm:items-center gap-4">
+                <div class="w-10 h-10 sm:w-12 sm:h-12 shrink-0 rounded-full bg-purple-100 text-purple-600 flex items-center justify-center text-lg sm:text-xl"><i class="fas fa-wallet"></i></div>
+                <div><p class="text-xs font-semibold text-slate-500 uppercase">ប្រាក់ចំណេញ (Profit)</p><p class="text-xl font-bold text-slate-800" id="statNetProfit">$0.00</p></div>
+            </div>
+        </div>
+
+        <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden mb-6">
+            <div class="p-4 bg-slate-50 border-b border-slate-200 flex flex-wrap justify-between items-center gap-4">
+                <h2 class="font-semibold text-slate-700 flex items-center gap-2">
+                    <i class="fas fa-list-ul text-indigo-500"></i> បញ្ជីជួញដូរ (Trades List)
+                </h2>
+                <div class="flex flex-wrap gap-2">
+                    <button onclick="exportToExcel()" class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm font-medium shadow-sm flex items-center gap-2">
+                        <i class="fas fa-file-excel"></i> ដោនឡត Excel
+                    </button>
+                    <button onclick="showClearModal()" class="px-4 py-2 bg-white text-red-600 rounded-lg hover:bg-red-50 transition-colors text-sm font-medium border border-slate-200 hover:border-red-200 shadow-sm"><i class="fas fa-trash-alt mr-1"></i> លុបទាំងអស់</button>
+                    <button onclick="addNewTradeRow()" class="px-4 py-2 bg-slate-800 text-white rounded-lg hover:bg-slate-900 transition-colors text-sm font-medium shadow-sm"><i class="fas fa-plus mr-1"></i> ថែមជួរថ្មី</button>
+                </div>
+            </div>
+
+            <div class="overflow-x-auto scroll-wrapper">
+                <table class="w-full text-left whitespace-nowrap min-w-max">
+                    <thead>
+                        <tr class="bg-slate-100 text-slate-600 text-xs uppercase tracking-wider">
+                            <th class="p-3 border-b border-slate-200 font-semibold text-center w-10">No.</th>
+                            <th class="p-3 border-b border-slate-200 font-semibold w-28 text-center">ថ្ងៃខែ (Date)</th>
+                            <th class="p-3 border-b border-slate-200 font-semibold w-24 text-center">ម៉ោង (Session)</th>
+                            <th class="p-3 border-b border-slate-200 font-semibold w-20 text-center">គូ</th>
+                            <th class="p-3 border-b border-slate-200 font-semibold w-48 text-center">ប្រភេទ Setup</th>
+                            <th class="p-3 border-b border-slate-200 font-semibold text-center w-16">Lot Size</th>
+                            <th class="p-3 border-b border-slate-200 font-semibold text-center w-16">Risk ($)</th>
+                            <th class="p-3 border-b border-slate-200 font-semibold text-center w-16">SL</th>
+                            <th class="p-3 border-b border-slate-200 font-semibold text-center w-16 text-indigo-600">R:R</th>
+                            <th class="p-3 border-b border-slate-200 font-semibold text-center w-24">Result</th>
+                            <th class="p-3 border-b border-slate-200 font-semibold text-center bg-indigo-50 w-24 text-indigo-700">Balance</th>
+                            <th class="p-3 border-b border-slate-200 font-semibold text-center w-16">Draw</th>
+                            <th class="p-3 border-b border-slate-200 font-semibold text-center w-20">រូបភាព (Chart)</th>
+                            <th class="p-3 border-b border-slate-200 font-semibold w-64 text-center">កត់ចំណាំ (Remark)</th>
+                            <th class="p-3 border-b border-slate-200 font-semibold text-center w-10"></th>
+                        </tr>
+                    </thead>
+                    <tbody id="tradeTableBody" class="text-sm"></tbody>
+                    <tfoot class="bg-slate-50 border-t border-slate-200">
+                        <tr>
+                            <td colspan="10" class="p-3 text-right font-bold text-slate-700 uppercase text-xs">សរុបប្រាក់ (Balance):</td>
+                            <td class="p-3 text-center font-bold text-lg text-indigo-700 bg-indigo-50/50" id="finalBalanceDisplay">$0.00</td>
+                            <td colspan="4"></td>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <div id="syncSettingsModal" class="modal">
+        <div class="bg-white rounded-xl shadow-xl w-full max-w-md mx-4 p-6 transform scale-95 transition-transform duration-200">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-lg font-bold text-slate-800"><i class="fas fa-wifi text-indigo-600"></i> កំណត់ការ Sync ឧបករណ៍</h3>
+                <button onclick="closeSyncSettingsModal()" class="text-slate-400 hover:text-red-500"><i class="fas fa-times text-xl"></i></button>
+            </div>
+            
+            <div class="space-y-4 text-sm">
+                <div class="p-3 bg-indigo-50 rounded-lg border border-indigo-100">
+                    <label class="block text-xs font-bold text-indigo-800 uppercase mb-1">🔑 កូនសោរ Sync (Sync Key)</label>
+                    <p class="text-[11px] text-indigo-600 mb-2">វាយពាក្យសម្ងាត់ដូចគ្នាទាំងនៅលើទូរសព្ទ និងកុំព្យូទ័រ ដើម្បីឲ្យទិន្នន័យរត់ចូលគ្នាតែមួយ។</p>
+                    <input type="text" id="syncKeyInput" placeholder="ឧ. Phiroun2222" class="w-full border border-indigo-300 rounded p-2 text-sm focus:border-indigo-500 outline-none font-bold uppercase tracking-wider text-indigo-900">
+                </div>
+
+                <div class="p-3 bg-slate-50 rounded-lg border border-slate-200">
+                    <label class="block text-xs font-bold text-slate-700 uppercase mb-1">⚙️ Firebase Configuration (សម្រាប់ប្រើជា App ផ្ទាល់ខ្លួន)</label>
+                    <p class="text-[11px] text-slate-500 mb-2">ប្រសិនបើបងចង់ប្តូរទៅកាន់ Firebase ផ្សេងទៀត សូមយកកូដ Config មកបិទភ្ជាប់ទីនេះ។ បើមិនដូរទេ ទុកចោលទទេក៏បាន!</p>
+                    <textarea id="firebaseConfigInput" rows="4" placeholder='{"apiKey": "...", "authDomain": "...", ...}' class="w-full border border-slate-300 rounded p-1.5 text-[11px] focus:border-slate-500 outline-none font-mono"></textarea>
+                </div>
+            </div>
+
+            <div class="flex gap-3 justify-center mt-5">
+                <button onclick="closeSyncSettingsModal()" class="px-4 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 font-medium transition-colors flex-1">បោះបង់</button>
+                <button onclick="saveSyncSettings()" class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-medium transition-colors flex-1">រក្សាទុក & Sync</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="modelSelectModal" class="modal">
+        <div class="bg-white rounded-xl shadow-xl w-full max-w-md mx-4 p-6 transform scale-95 transition-transform duration-200">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-lg font-bold text-slate-800">ជ្រើសរើសយុទ្ធសាស្ត្រចូលទិញ</h3>
+                <button onclick="closeModelModal()" class="text-slate-400 hover:text-red-500"><i class="fas fa-times text-xl"></i></button>
+            </div>
+            <p class="text-xs text-slate-500 mb-3">អ្នកអាចគ្រីសជ្រើសរើសលើសពី១ ប្រសិនបើមាន Confirmation ច្រើនជាន់គ្នា។</p>
+            <div class="space-y-2 max-h-60 overflow-y-auto pr-2 mb-4" id="modelCheckboxes"></div>
+            <div class="mb-4 pt-3 border-t border-slate-100">
+                <label class="block text-xs font-semibold text-slate-600 mb-1">វាយបញ្ចូលថ្មីខ្លួនឯង (បើមាន):</label>
+                <input type="text" id="customModelInput" placeholder="ឧ. Engulfing..." class="w-full border border-slate-300 rounded p-2 text-sm focus:border-indigo-500 outline-none">
+            </div>
+            <button onclick="saveSelectedModels()" class="w-full py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-medium transition-colors shadow-sm">យល់ព្រម</button>
+        </div>
+    </div>
+
+    <div id="clearModal" class="modal">
+        <div class="bg-white rounded-xl shadow-xl max-w-sm w-full mx-4 p-6 text-center transform scale-95 transition-transform duration-200">
+            <div class="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4 text-red-500 text-2xl"><i class="fas fa-exclamation-triangle"></i></div>
+            <h3 class="text-lg font-bold text-slate-800 mb-2">តើអ្នកពិតជាចង់លុបទិន្នន័យមែនទេ?</h3>
+            <p class="text-sm text-slate-500 mb-6">តើអ្នកបានទាញយក (Excel) រក្សាទុករួចហើយឬនៅ? ទិន្នន័យនឹងត្រូវលុបចោលទាំងស្រុង។</p>
+            <div class="flex gap-3 justify-center">
+                <button onclick="closeClearModal()" class="px-4 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 font-medium transition-colors flex-1">បោះបង់</button>
+                <button onclick="executeClearAll()" class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 font-medium transition-colors flex-1">យល់ព្រមលុប</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="deleteSingleModal" class="modal">
+        <div class="bg-white rounded-xl shadow-xl max-w-sm w-full mx-4 p-6 text-center transform scale-95 transition-transform duration-200">
+            <div class="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4 text-red-500 text-2xl"><i class="fas fa-trash-alt"></i></div>
+            <h3 class="text-lg font-bold text-slate-800 mb-2">តើអ្នកពិតជាចង់លុបជួរនេះមែនទេ?</h3>
+            <p class="text-sm text-slate-500 mb-6">ទិន្នន័យនៃជួរនេះនឹងត្រូវលុបចោលជាអចិន្ត្រៃយ៍។</p>
+            <div class="flex gap-3 justify-center">
+                <button onclick="closeDeleteSingleModal()" class="px-4 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 font-medium transition-colors flex-1">បោះបង់</button>
+                <button onclick="executeDeleteSingleTrade()" class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 font-medium transition-colors flex-1">យល់ព្រមលុប</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="alertModal" class="modal">
+        <div class="bg-white rounded-xl shadow-xl max-w-sm w-full mx-4 p-6 text-center transform scale-95 transition-transform duration-2000">
+            <div class="w-16 h-16 bg-yellow-100 rounded-full flex items-center justify-center mx-auto mb-4 text-yellow-500 text-2xl"><i class="fas fa-info-circle"></i></div>
+            <h3 class="text-lg font-bold text-slate-800 mb-2">ជូនដំណឹង</h3>
+            <p class="text-sm text-slate-500 mb-6" id="alertModalText">សារ</p>
+            <div class="flex gap-3 justify-center">
+                <button onclick="closeAlertModal()" class="w-full px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-medium transition-colors">យល់ព្រម</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let firebaseConfig = {
+            apiKey: "AIzaSyD-OPUMwOgo7YvwqZ_X8gOvz-Q7e5f-F3w",
+            authDomain: "tradingjournal-e10c9.firebaseapp.com",
+            projectId: "tradingjournal-e10c9",
+            storageBucket: "tradingjournal-e10c9.firebasestorage.app",
+            messagingSenderId: "78099054603",
+            appId: "1:78099054603:web:f3a49b36cf401f3c69870e",
+            measurementId: "G-1FXRMQ2ZZF"
+        };
+        
+        const appId = 'trading-tracker-app';
+        const LOCAL_STORAGE_KEY = 'trading_journal_pro_backup';
+        const CUSTOM_CONFIG_KEY = 'custom_firebase_config';
+        const SYNC_KEY_STORE = 'custom_sync_key';
+
+        const savedCustomConfig = localStorage.getItem(CUSTOM_CONFIG_KEY);
+        if (savedCustomConfig) {
+            try { firebaseConfig = JSON.parse(savedCustomConfig); } catch(e) { console.error("Firebase config validation error", e); }
+        }
+
+        let syncKey = localStorage.getItem(SYNC_KEY_STORE) || 'PHIROUN2222';
+        let currentUserId = null, db, auth;
+
+        window.appState = { trades: [], settings: { accountSize: 10000, rr: 1, pipValue: 10 } };
+        
+        const availableModelsList = [
+            "Sn1P3r Order Flow", "Sn1P3r FRVP Pro", "CRT + TBS",
+            "SMT (XAU vs XAG)", "ICT 2022 (MSS+FVG)", "Silver Bullet", "Judas Swing", "Breaker Block",
+            "Volume Delta", "BTrader Concept 2.0"
+        ];
+        let currentEditingTradeId = null;
+
+        function loadLocalBackup() {
+            try {
+                const savedData = localStorage.getItem(LOCAL_STORAGE_KEY);
+                if (savedData) {
+                    const parsed = JSON.parse(savedData);
+                    if (parsed && parsed.trades) {
+                        window.appState = parsed;
+                        document.getElementById('globalAccountSize').value = window.appState.settings.accountSize;
+                        document.getElementById('globalRR').value = window.appState.settings.rr;
+                        document.getElementById('globalPipValue').value = window.appState.settings.pipValue;
+                    }
+                }
+            } catch (e) { console.error("Error loading backup", e); }
+        }
+
+        function saveLocalBackup() {
+            try {
+                localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(window.appState));
+            } catch (e) { console.error("Error saving backup", e); }
+        }
+
+        window.showAlert = function(text) {
+            document.getElementById('alertModalText').innerText = text;
+            const modal = document.getElementById('alertModal');
+            modal.classList.add('active');
+            setTimeout(() => modal.firstElementChild.classList.remove('scale-95'), 10);
+        };
+
+        window.closeAlertModal = function() {
+            const modal = document.getElementById('alertModal');
+            modal.firstElementChild.classList.add('scale-95');
+            setTimeout(() => modal.classList.remove('active'), 200);
+        };
+
+        window.openSyncSettingsModal = function() {
+            document.getElementById('syncKeyInput').value = syncKey;
+            document.getElementById('firebaseConfigInput').value = savedCustomConfig || '';
+            const modal = document.getElementById('syncSettingsModal');
+            modal.classList.add('active');
+            setTimeout(() => modal.firstElementChild.classList.remove('scale-95'), 10);
+        };
+
+        window.closeSyncSettingsModal = function() {
+            const modal = document.getElementById('syncSettingsModal');
+            modal.firstElementChild.classList.add('scale-95');
+            setTimeout(() => modal.classList.remove('active'), 200);
+        };
+
+        window.saveSyncSettings = function() {
+            const keyVal = document.getElementById('syncKeyInput').value.trim();
+            const configVal = document.getElementById('firebaseConfigInput').value.trim();
+
+            if (keyVal) {
+                localStorage.setItem(SYNC_KEY_STORE, keyVal);
+            } else {
+                localStorage.removeItem(SYNC_KEY_STORE);
+            }
+
+            if (configVal) {
+                try {
+                    JSON.parse(configVal); 
+                    localStorage.setItem(CUSTOM_CONFIG_KEY, configVal);
+                } catch(e) {
+                    return window.showAlert("កូដ Firebase Config មិនត្រឹមត្រូវតាមទម្រង់ JSON ទេ!");
+                }
+            } else {
+                localStorage.removeItem(CUSTOM_CONFIG_KEY);
+            }
+
+            window.showAlert("រក្សាទុកជោគជ័យ! កម្មវិធីនឹងដំណើរការការ Sync ឡើងវិញ។");
+            setTimeout(() => { window.location.reload(); }, 1500);
+        };
+
+        async function initApp() {
+            loadLocalBackup();
+            renderTable(); 
+
+            if (!firebaseConfig) {
+                updateStatus(false, "Offline Mode (Auto-Saved)");
+                return;
+            }
+            
+            if (window.appState.trades.length === 0) {
+                document.getElementById('loadingOverlay').classList.remove('hidden');
+            } else {
+                document.getElementById('syncStatus').className = "inline-block w-2.5 h-2.5 rounded-full bg-yellow-400 animate-pulse";
+                document.getElementById('syncText').innerText = "កំពុងតភ្ជាប់ទៅ Cloud...";
+            }
+
+            try {
+                if (!firebase.apps.length) {
+                    firebase.initializeApp(firebaseConfig);
+                }
+                auth = firebase.auth(); 
+                db = firebase.firestore();
+
+                let authenticated = false;
+                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                    try {
+                        await auth.signInWithCustomToken(__initial_auth_token);
+                        authenticated = true;
+                    } catch (err) {
+                        console.warn("បដិសេធ Custom Token:", err);
+                    }
+                }
+
+                if (!authenticated) {
+                    try {
+                        await auth.signInAnonymously();
+                    } catch (err) {
+                        console.error("កំហុសពេលប្រើ Anonymous Auth:", err);
+                        if (err.code === 'auth/configuration-not-found' || err.code === 'auth/operation-not-allowed') {
+                            window.showAlert("⚠️ សូមចូលទៅកាន់ Firebase Console -> Authentication -> Sign-in method រួចបើក (Enable) 'Anonymous' ជាមុនសិន។");
+                        }
+                    }
+                }
+
+                auth.onAuthStateChanged((user) => {
+                    if (user) {
+                        currentUserId = syncKey ? syncKey.toLowerCase().replace(/[^a-z0-9]/g, '_') : user.uid;
+                        setupRealtimeListeners();
+                    } else {
+                        currentUserId = null;
+                    }
+                });
+
+            } catch (error) { 
+                console.error("Firebase connection error", error);
+                document.getElementById('loadingOverlay').classList.add('hidden'); 
+                updateStatus(false, "Offline (Auto-Saved)");
+                renderTable();
+            }
+        }
+
+        function setupRealtimeListeners() {
+            if (!currentUserId || !db) return;
+            
+            const settingsDocRef = db.doc(`artifacts/${appId}/public/data/settings_${currentUserId}/global`);
+            const tradesColRef = db.collection(`artifacts/${appId}/public/data/trades_${currentUserId}`);
+
+            settingsDocRef.onSnapshot((docSnapshot) => {
+                if (docSnapshot.exists) {
+                    window.appState.settings = { ...window.appState.settings, ...docSnapshot.data() };
+                    document.getElementById('globalAccountSize').value = window.appState.settings.accountSize;
+                    document.getElementById('globalRR').value = window.appState.settings.rr;
+                    document.getElementById('globalPipValue').value = window.appState.settings.pipValue;
+                    saveLocalBackup();
+                }
+                renderTable();
+            }, (error) => console.error("Settings listen error:", error));
+
+            tradesColRef.onSnapshot((snapshot) => {
+                let fetchedTrades = [];
+                snapshot.forEach(doc => fetchedTrades.push({ id: doc.id, ...doc.data() }));
+                
+                if(fetchedTrades.length > 0) {
+                    window.appState.trades = fetchedTrades.sort((a, b) => a.timestamp - b.timestamp);
+                    saveLocalBackup();
+                }
+                
+                updateStatus(true, syncKey ? `Sync រួចរាល់ (កូនសោរ៖ ${syncKey.toUpperCase()})` : "Cloud Sync រួចរាល់");
+                document.getElementById('loadingOverlay').classList.add('hidden');
+                renderTable();
+                if (window.appState.trades.length === 0) window.addNewTradeRow(true);
+            }, (error) => {
+                console.error("Snapshot error:", error);
+                updateStatus(false, " Offline (Auto-Saved)");
+                document.getElementById('loadingOverlay').classList.add('hidden');
+                renderTable();
+            });
+        }
+
+        function updateStatus(isOnline, text) {
+            const dot = document.getElementById('syncStatus'); const txt = document.getElementById('syncText');
+            if(isOnline) { dot.className = "inline-block w-2.5 h-2.5 rounded-full bg-green-500 animate-pulse"; txt.innerText = text; } 
+            else { dot.className = "inline-block w-2.5 h-2.5 rounded-full bg-red-500"; txt.innerText = text; }
+        }
+
+        window.formatMoney = (amount) => '$' + parseFloat(amount).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        
+        const getTodayDate = () => { 
+            const d = new Date(); 
+            return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`; 
+        };
+        
+        const addDays = (dateStr, days) => {
+            if (!dateStr) return ''; 
+            let d;
+            if (dateStr.includes('-')) {
+                const parts = dateStr.split('-');
+                if (parts.length !== 3) return dateStr;
+                d = new Date(parts[0], parts[1] - 1, parts[2]);
+            } else if (dateStr.includes('/')) {
+                const parts = dateStr.split('/'); 
+                if (parts.length !== 3) return dateStr;
+                d = new Date(parts[2], parts[1] - 1, parts[0]); 
+            } else {
+                return dateStr;
+            }
+            d.setDate(d.getDate() + days);
+            return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
+        };
+
+        window.updateSettings = async function() {
+            window.appState.settings = {
+                accountSize: parseFloat(document.getElementById('globalAccountSize').value) || 0,
+                rr: parseFloat(document.getElementById('globalRR').value) || 1,
+                pipValue: parseFloat(document.getElementById('globalPipValue').value) || 10
+            };
+            saveLocalBackup();
+            
+            if (currentUserId && db) {
+                const settingsDocRef = db.doc(`artifacts/${appId}/public/data/settings_${currentUserId}/global`);
+                await settingsDocRef.set(window.appState.settings, { merge: true }).catch(e => console.error(e));
+            }
+            renderTable();
+        };
+
+        window.updateTradeData = async function(id, field, value) {
+            const tradeIndex = window.appState.trades.findIndex(t => t.id === id);
+            if (tradeIndex === -1) return;
+
+            let parsedValue = ['pair', 'type', 'remark', 'result', 'date', 'chartUrl', 'session'].includes(field) ? value : (parseFloat(value) || 0);
+            window.appState.trades[tradeIndex][field] = parsedValue;
+
+            if (field === 'date' && parsedValue) {
+                let currentDateStr = parsedValue;
+                for (let i = tradeIndex + 1; i < window.appState.trades.length; i++) {
+                    currentDateStr = addDays(currentDateStr, 1);
+                    window.appState.trades[i]['date'] = currentDateStr;
+                    
+                    if (currentUserId && db) {
+                        const nextTradeRef = db.doc(`artifacts/${appId}/public/data/trades_${currentUserId}/${window.appState.trades[i].id}`);
+                        nextTradeRef.set({ date: currentDateStr }, { merge: true });
+                    }
+                }
+            }
+            
+            saveLocalBackup();
+            renderTable();
+            
+            if (currentUserId && db) {
+                const tradeRef = db.doc(`artifacts/${appId}/public/data/trades_${currentUserId}/${id}`);
+                await tradeRef.set({ [field]: parsedValue }, { merge: true }).catch(e => console.error(e));
+            }
+        };
+
+        window.autoExpandTextarea = function(element) {
+            element.style.height = 'auto';
+            element.style.height = (element.scrollHeight) + 'px';
+        };
+
+        window.addNewTradeRow = async function(isInitial = false) {
+            const trades = window.appState.trades;
+            let lastTrade = trades.length > 0 ? trades[trades.length - 1] : null;
+            let nextDate = (lastTrade && !isInitial && lastTrade.date) ? lastTrade.date : getTodayDate();
+            
+            const newId = 'trade_' + Date.now();
+            const newTrade = {
+                id: newId, 
+                date: nextDate, 
+                session: lastTrade ? lastTrade.session : '',
+                pair: lastTrade && !isInitial ? lastTrade.pair : 'XAUUSD',
+                type: '', 
+                lotSize: lastTrade ? lastTrade.lotSize : 0.05,
+                risk: 0, 
+                slPip: lastTrade ? lastTrade.slPip : 100, 
+                // កំណត់យក R:R ពី Global Settings ធ្វើជាលំនាំដើម
+                rr: window.appState.settings.rr || 1, 
+                result: 'Pending', 
+                withdraw: 0, 
+                remark: '', 
+                chartUrl: '', 
+                timestamp: Date.now()
+            };
+            
+            window.appState.trades.push(newTrade); 
+            saveLocalBackup();
+            renderTable();
+            
+            if (currentUserId && db) {
+                const tradeRef = db.doc(`artifacts/${appId}/public/data/trades_${currentUserId}/${newId}`);
+                await tradeRef.set(newTrade, { merge: true }).catch(e => console.error(e));
+            }
+            if(!isInitial) setTimeout(() => window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' }), 100);
+        };
+
+        window.openModelModal = function(tradeId) {
+            currentEditingTradeId = tradeId;
+            const trade = window.appState.trades.find(t => t.id === tradeId);
+            const currentTypes = trade.type ? trade.type.split(' + ').map(s => s.trim()) : [];
+            const container = document.getElementById('modelCheckboxes');
+            container.innerHTML = '';
+            
+            availableModelsList.forEach(model => {
+                const isChecked = currentTypes.includes(model);
+                container.innerHTML += `
+                    <label class="flex items-center p-2 hover:bg-slate-50 rounded cursor-pointer border border-transparent hover:border-slate-200 transition-colors">
+                        <input type="checkbox" value="${model}" class="model-cb w-4 h-4 text-indigo-600 rounded border-slate-300 focus:ring-indigo-500 mr-3" ${isChecked ? 'checked' : ''}>
+                        <span class="text-sm text-slate-700 font-medium">${model}</span>
+                    </label>`;
+            });
+            
+            const presetModels = new Set(availableModelsList);
+            document.getElementById('customModelInput').value = currentTypes.filter(t => !presetModels.has(t) && t !== '').join(' + ');
+
+            const modal = document.getElementById('modelSelectModal');
+            modal.classList.add('active'); setTimeout(() => modal.firstElementChild.classList.remove('scale-95'), 10);
+        };
+
+        window.closeModelModal = function() {
+            const modal = document.getElementById('modelSelectModal');
+            modal.firstElementChild.classList.add('scale-95'); setTimeout(() => modal.classList.remove('active'), 200);
+        };
+
+        window.saveSelectedModels = function() {
+            let selected = Array.from(document.querySelectorAll('.model-cb:checked')).map(cb => cb.value);
+            const customInput = document.getElementById('customModelInput').value.trim();
+            if(customInput) selected.push(customInput);
+            window.updateTradeData(currentEditingTradeId, 'type', selected.join(' + '));
+            window.closeModelModal();
+        };
+
+        function renderTable() {
+            const tableBody = document.getElementById('tradeTableBody'); tableBody.innerHTML = '';
+            const { accountSize, rr, pipValue } = window.appState.settings;
+            let currentBalance = accountSize, wins = 0, losses = 0, bes = 0;
+
+            window.appState.trades.forEach((trade, index) => {
+                const calculatedRisk = (trade.lotSize * trade.slPip * pipValue);
+                // ប្រសិនបើអត់ទាន់មាន rr ផ្ទាល់ខ្លួនទេ យក Global RR មកប្រើ
+                const currentTradeRR = trade.rr !== undefined ? parseFloat(trade.rr) : rr;
+                const profitAmount = calculatedRisk * currentTradeRR;
+                
+                if (trade.result === 'Win') { currentBalance += profitAmount; wins++; } 
+                else if (trade.result === 'Loss') { currentBalance -= calculatedRisk; losses++; }
+                else if (trade.result === 'BE') { bes++; } 
+                
+                if(trade.withdraw > 0) currentBalance -= trade.withdraw;
+
+                let rowBg = 'bg-white', resultTextClass = 'text-slate-600 border-slate-300';
+                if (trade.result === 'Win') { rowBg = 'bg-green-50/40'; resultTextClass = 'text-green-700 font-bold border-green-300 bg-green-50'; }
+                else if (trade.result === 'Loss') { rowBg = 'bg-red-50/40'; resultTextClass = 'text-red-700 font-bold border-red-300 bg-red-50'; }
+                else if (trade.result === 'BE') { rowBg = 'bg-amber-50/40'; resultTextClass = 'text-amber-700 font-bold border-amber-300 bg-amber-50'; }
+
+                let displayType = trade.type || 'ចុចរើស Setup...';
+                let typeStyle = trade.type ? 'text-indigo-600 font-bold text-xs bg-indigo-50 border border-indigo-100 rounded px-2 py-1 inline-block w-full' : 'text-slate-400 italic text-sm';
+                
+                let chartElement = `
+                    <div class="flex items-center justify-center gap-1">
+                        <input type="text" value="${trade.chartUrl || ''}" placeholder="ដាក់លីង TV" 
+                            class="clean-input text-[10px] w-14 bg-slate-100"
+                            onchange="window.updateTradeData('${trade.id}', 'chartUrl', this.value)">
+                        ${trade.chartUrl ? `<a href="${trade.chartUrl}" target="_blank" class="text-blue-500 hover:text-blue-700 flex flex-col items-center"><i class="fas fa-image text-lg"></i><span class="text-[9px]">មើលរូប</span></a>` : `<span class="text-slate-300 text-xs"><i class="fas fa-image"></i></span>`}
+                    </div>`;
+
+                const row = document.createElement('tr');
+                row.className = `${rowBg} hover:bg-slate-50 transition-colors border-b border-slate-100 group`;
+                
+                row.innerHTML = `
+                    <td class="p-2 text-center text-slate-400 text-xs font-medium align-top pt-3">${index + 1}</td>
+                    <td class="p-2 align-top"><input type="text" value="${trade.date || ''}" placeholder="DD/MM/YYYY" class="date-picker clean-input text-slate-500 text-sm text-center cursor-pointer bg-slate-50 hover:bg-white border border-slate-200" onchange="window.updateTradeData('${trade.id}', 'date', this.value)"></td>
+                    <td class="p-2 align-top pt-2">
+                        <select class="clean-input text-center text-slate-600 cursor-pointer text-xs" onchange="window.updateTradeData('${trade.id}', 'session', this.value)">
+                            <option value="" ${!trade.session ? 'selected' : ''}>-- រើស --</option>
+                            <option value="Asian" ${trade.session === 'Asian' ? 'selected' : ''}>Asian</option>
+                            <option value="London" ${trade.session === 'London' ? 'selected' : ''}>London</option>
+                            <option value="New York" ${trade.session === 'New York' ? 'selected' : ''}>New York</option>
+                            <option value="Overlap" ${trade.session === 'Overlap' ? 'selected' : ''}>Overlap</option>
+                        </select>
+                    </td>
+                    <td class="p-2 align-top"><input type="text" value="${trade.pair}" placeholder="XAUUSD" class="clean-input uppercase font-medium text-slate-700 text-center" onchange="window.updateTradeData('${trade.id}', 'pair', this.value)"></td>
+                    <td class="p-2 text-center cursor-pointer align-top pt-3" onclick="window.openModelModal('${trade.id}')"><div class="${typeStyle} whitespace-normal leading-tight">${displayType}</div></td>
+                    <td class="p-2 text-center align-top pt-2"><input type="number" step="0.01" value="${trade.lotSize}" class="clean-input text-center font-medium" onchange="window.updateTradeData('${trade.id}', 'lotSize', this.value)"></td>
+                    <td class="p-2 text-center align-top pt-3"><div class="text-slate-600 font-medium">${calculatedRisk.toFixed(2)}</div></td>
+                    <td class="p-2 text-center align-top pt-2"><input type="number" value="${trade.slPip}" class="clean-input text-center" onchange="window.updateTradeData('${trade.id}', 'slPip', this.value)"></td>
+                    
+                    <td class="p-2 text-center align-top pt-2">
+                        <div class="flex items-center justify-center text-xs font-medium text-slate-500">
+                            1:<input type="number" step="0.1" value="${currentTradeRR}" class="clean-input text-center w-12 ml-1 bg-white border border-slate-200 text-indigo-600 font-bold" onchange="window.updateTradeData('${trade.id}', 'rr', this.value)">
+                        </div>
+                    </td>
+
+                    <td class="p-2 text-center align-top pt-2">
+                        <select class="p-1.5 border rounded-md outline-none cursor-pointer w-full text-center appearance-none ${resultTextClass} transition-colors shadow-sm" onchange="window.updateTradeData('${trade.id}', 'result', this.value)">
+                            <option value="Pending" ${trade.result === 'Pending' ? 'selected' : ''}>-- រង់ចាំ --</option>
+                            <option value="Win" ${trade.result === 'Win' ? 'selected' : ''}>Win (ឈ្នះ)</option>
+                            <option value="Loss" ${trade.result === 'Loss' ? 'selected' : ''}>Loss (ចាញ់)</option>
+                            <option value="BE" ${trade.result === 'BE' ? 'selected' : ''}>BE (រួចខ្លួន)</option>
+                        </select>
+                    </td>
+                    <td class="p-2 text-center font-bold text-indigo-700 bg-indigo-50/30 tracking-tight align-top pt-3">${window.formatMoney(currentBalance)}</td>
+                    <td class="p-2 text-center align-top pt-2"><input type="number" value="${trade.withdraw || ''}" placeholder="0" class="clean-input text-center text-orange-600" onchange="window.updateTradeData('${trade.id}', 'withdraw', this.value)"></td>
+                    <td class="p-2 align-top pt-2">${chartElement}</td>
+                    <td class="p-2 align-top pt-2">
+                        <textarea placeholder="វាយចំណាំនៅទីនេះ..." class="clean-input text-slate-600 text-xs w-full" onchange="window.updateTradeData('${trade.id}', 'remark', this.value)" oninput="window.autoExpandTextarea(this)">${trade.remark || ''}</textarea>
+                    </td>
+                    <td class="p-2 text-center align-top pt-2">
+                        <button onclick="window.deleteTrade('${trade.id}')" class="text-slate-400 hover:text-red-600 p-1.5 rounded-md hover:bg-red-50 transition-all" title="លុបជួរនេះ">
+                            <i class="fas fa-trash-alt"></i>
+                        </button>
+                    </td>
+                `;
+                tableBody.appendChild(row);
+            });
+
+            setTimeout(() => { 
+                document.querySelectorAll('textarea').forEach(ta => window.autoExpandTextarea(ta)); 
+                
+                flatpickr('.date-picker', {
+                    dateFormat: "d/m/Y",
+                    allowInput: true,
+                    disableMobile: "true"
+                });
+            }, 100);
+
+            document.getElementById('finalBalanceDisplay').innerText = window.formatMoney(currentBalance);
+            document.getElementById('statWins').innerText = wins; 
+            document.getElementById('statLosses').innerText = losses;
+            document.getElementById('statBE').innerText = bes;
+
+            const totalFinishedTrades = wins + losses; 
+            document.getElementById('statWinRate').innerText = totalFinishedTrades > 0 ? Math.round((wins / totalFinishedTrades) * 100) + '%' : '0%';
+            const netProfit = currentBalance - accountSize;
+            const profitEl = document.getElementById('statNetProfit');
+            profitEl.innerText = window.formatMoney(netProfit); profitEl.className = `text-xl font-bold ${netProfit >= 0 ? 'text-green-600' : 'text-red-500'}`;
+        }
+
+        let tradeToDeleteId = null;
+
+        window.deleteTrade = function(id) {
+            tradeToDeleteId = id;
+            const modal = document.getElementById('deleteSingleModal');
+            modal.classList.add('active'); 
+            setTimeout(() => modal.firstElementChild.classList.remove('scale-95'), 10);
+        };
+
+        window.closeDeleteSingleModal = function() {
+            const modal = document.getElementById('deleteSingleModal');
+            modal.firstElementChild.classList.add('scale-95'); 
+            setTimeout(() => { modal.classList.remove('active'); tradeToDeleteId = null; }, 200);
+        };
+
+        window.executeDeleteSingleTrade = async function() {
+            if(!tradeToDeleteId) return;
+            const id = tradeToDeleteId;
+            window.closeDeleteSingleModal();
+            
+            if (currentUserId && db) {
+                const tradeRef = db.doc(`artifacts/${appId}/public/data/trades_${currentUserId}/${id}`);
+                await tradeRef.delete();
+            }
+            window.appState.trades = window.appState.trades.filter(t => t.id !== id); 
+            saveLocalBackup();
+            renderTable();
+        };
+
+        window.showClearModal = () => { const modal = document.getElementById('clearModal'); modal.classList.add('active'); setTimeout(() => modal.firstElementChild.classList.remove('scale-95'), 10); };
+        window.closeClearModal = () => { const modal = document.getElementById('clearModal'); modal.firstElementChild.classList.add('scale-95'); setTimeout(() => modal.classList.remove('active'), 200); };
+        
+        window.executeClearAll = async () => {
+            window.closeClearModal(); document.getElementById('loadingOverlay').classList.remove('hidden');
+            if (currentUserId && db) {
+                for (const trade of window.appState.trades) {
+                    const tradeRef = db.doc(`artifacts/${appId}/public/data/trades_${currentUserId}/${trade.id}`);
+                    await tradeRef.delete();
+                }
+            }
+            window.appState.trades = []; 
+            saveLocalBackup();
+            window.addNewTradeRow(true); 
+            document.getElementById('loadingOverlay').classList.add('hidden');
+        };
+
+        window.exportToExcel = () => {
+            if(window.appState.trades.length === 0) return window.showAlert("មិនមានទិន្នន័យសម្រាប់ទាញយកទេ!");
+            const { accountSize, rr, pipValue } = window.appState.settings;
+            let currentBalance = accountSize;
+
+            const header = ["No.", "ថ្ងៃខែ (Date)", "ម៉ោង (Session)", "គូ (Pair)", "ប្រភេទ Setup", "Lot Size", "Risk ($)", "SL (Pip)", "R:R", "Result", "Balance ($)", "Withdraw ($)", "រូបភាព (Chart)", "កត់ចំណាំ (Remark)"];
+
+            const dataRows = window.appState.trades.map((t, index) => {
+                const riskAmount = t.lotSize * t.slPip * pipValue;
+                const tradeRR = t.rr !== undefined ? parseFloat(t.rr) : rr;
+                const profitAmount = riskAmount * tradeRR;
+                
+                if (t.result === 'Win') currentBalance += profitAmount;
+                else if (t.result === 'Loss') currentBalance -= riskAmount;
+                if(t.withdraw > 0) currentBalance -= t.withdraw;
+
+                let dateStr = t.date;
+                if(t.date && t.date.includes('-')) {
+                    const [y, m, d] = t.date.split('-');
+                    dateStr = `${d}/${m}/${y}`;
+                }
+
+                return [
+                    index + 1, dateStr, t.session || '', t.pair, t.type, t.lotSize,
+                    parseFloat(riskAmount.toFixed(2)), t.slPip, tradeRR,
+                    t.result === 'Pending' ? '' : t.result,
+                    parseFloat(currentBalance.toFixed(2)), t.withdraw || 0,
+                    t.chartUrl || '', t.remark || ''
+                ];
+            });
+
+            const wsData = [header, ...dataRows];
+            const ws = XLSX.utils.aoa_to_sheet(wsData);
+
+            const range = XLSX.utils.decode_range(ws['!ref']);
+            for (let R = range.s.r; R <= range.e.r; ++R) {
+                for (let C = range.s.c; C <= range.e.c; ++C) {
+                    const cellRef = XLSX.utils.encode_cell({c:C, r:R});
+                    if (!ws[cellRef]) continue;
+
+                    ws[cellRef].s = {
+                        font: { name: "Khmer OS Battambang", sz: 10 },
+                        alignment: { vertical: "center", horizontal: "center", wrapText: true },
+                        border: { top: { style: "thin", color: { rgb: "CBD5E1" } }, bottom: { style: "thin", color: { rgb: "CBD5E1" } }, left: { style: "thin", color: { rgb: "CBD5E1" } }, right: { style: "thin", color: { rgb: "CBD5E1" } } }
+                    };
+
+                    if (R === 0) {
+                        ws[cellRef].s.fill = { fgColor: { rgb: "F1F5F9" } };
+                        ws[cellRef].s.font.bold = true;
+                        ws[cellRef].s.font.color = { rgb: "334155" };
+                    }
+
+                    if (R > 0) {
+                        if (C === 9) { // Result Column (ឥឡូវនៅលេខរៀងទី 9 ព្រោះមាន R:R ថែមមុខ)
+                            if (ws[cellRef].v === 'Win') { ws[cellRef].s.font.color = { rgb: "15803D" }; ws[cellRef].s.font.bold = true; } 
+                            else if (ws[cellRef].v === 'Loss') { ws[cellRef].s.font.color = { rgb: "B91C1C" }; ws[cellRef].s.font.bold = true; }
+                            else if (ws[cellRef].v === 'BE') { ws[cellRef].s.font.color = { rgb: "D97706" }; ws[cellRef].s.font.bold = true; }
+                        }
+                        if (C === 10) { ws[cellRef].s.font.color = { rgb: "4338CA" }; ws[cellRef].s.font.bold = true; } 
+                        if(C === 4 || C === 13) { ws[cellRef].s.alignment.horizontal = "left"; }
+                    }
+                }
+            }
+
+            ws['!cols'] = [{wch: 5}, {wch: 12}, {wch: 12}, {wch: 10}, {wch: 35}, {wch: 8}, {wch: 10}, {wch: 8}, {wch: 8}, {wch: 10}, {wch: 12}, {wch: 10}, {wch: 25}, {wch: 45}];
+
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, "Trading Journal");
+            XLSX.writeFile(wb, `Trading_Journal_${new Date().toLocaleString('default', { month: 'short' })}_${new Date().getFullYear()}.xlsx`);
+        };
+
+        initApp();
+    </script>
+</body>
+</html>
