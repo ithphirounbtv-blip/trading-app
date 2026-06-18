@@ -4,12 +4,31 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>កម្មវិធីគ្រប់គ្រងការជួញដូរ | Trading Tracker Pro</title>
+    
+    <!-- PWA Configuration សម្រាប់ដំឡើង App និងបង្ហាញរូបកូនបង -->
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#4f46e5">
+    <link rel="apple-touch-icon" href="icon.png">
+
+    <!-- កូដសម្រាប់ចុះឈ្មោះ Service Worker ឱ្យលោតប៊ូតុង Install -->
+    <script>
+        // ត្រួតពិនិត្យ protocol ដើម្បីចៀសវាង error នៅក្នុង blob: ឬ file: 
+        if ('serviceWorker' in navigator && (window.location.protocol === 'https:' || window.location.protocol === 'http:')) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('./sw.js')
+                    .then(() => console.log('App បានចុះឈ្មោះរួចរាល់!'))
+                    .catch(err => console.log('មានបញ្ហា:', err));
+            });
+        }
+    </script>
+
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
     <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
 
+    <!-- ប្រើប្រាស់ Firebase ជំនាន់ 8 (Compat) -->
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
@@ -29,12 +48,13 @@
         .clean-input:hover { border-color: #e2e8f0; background: #fff; }
         .clean-input:focus { border-color: #6366f1; background: #fff; box-shadow: 0 0 0 2px rgba(99,102,241,0.1); }
         textarea.clean-input { resize: none; overflow: hidden; min-height: 32px; line-height: 1.5; }
-        .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 50; align-items: center; justify-content: center; }
-        .modal.active { display: flex; }
+        .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; align-items: center; justify-content: center; }
+        .modal.active { display: flex !important; }
     </style>
 </head>
 <body class="text-slate-800">
 
+    <!-- បញ្ជីយុទ្ធសាស្ត្រ -->
     <datalist id="entryModels">
         <option value="Sn1P3r Order Flow"></option>
         <option value="Sn1P3r FRVP Pro"></option>
@@ -57,6 +77,7 @@
 
     <div id="captureArea" class="container mx-auto p-2 sm:p-4 max-w-[1400px]">
         
+        <!-- HEADER -->
         <header class="bg-white rounded-xl shadow-sm p-4 sm:p-6 mb-6 flex flex-col xl:flex-row justify-between items-start xl:items-center border border-slate-200 gap-4">
             <div>
                 <h1 class="text-2xl font-bold text-indigo-700 flex items-center gap-2">
@@ -98,6 +119,7 @@
             </div>
         </header>
 
+        <!-- STATS WIDGETS -->
         <div class="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
             <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex flex-col sm:flex-row items-start sm:items-center gap-4">
                 <div class="w-10 h-10 sm:w-12 sm:h-12 shrink-0 rounded-full bg-green-100 text-green-600 flex items-center justify-center text-lg sm:text-xl"><i class="fas fa-trophy"></i></div>
@@ -121,6 +143,7 @@
             </div>
         </div>
 
+        <!-- MAIN TABLE -->
         <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden mb-6">
             <div class="p-4 bg-slate-50 border-b border-slate-200 flex flex-wrap justify-between items-center gap-4">
                 <h2 class="font-semibold text-slate-700 flex items-center gap-2">
@@ -169,27 +192,22 @@
         </div>
     </div>
 
+    <!-- MODALS -->
+
+    <!-- Sync Settings Modal -->
     <div id="syncSettingsModal" class="modal">
         <div class="bg-white rounded-xl shadow-xl w-full max-w-md mx-4 p-6 transform scale-95 transition-transform duration-200">
             <div class="flex justify-between items-center mb-4">
                 <h3 class="text-lg font-bold text-slate-800"><i class="fas fa-wifi text-indigo-600"></i> កំណត់ការ Sync ឧបករណ៍</h3>
                 <button onclick="closeSyncSettingsModal()" class="text-slate-400 hover:text-red-500"><i class="fas fa-times text-xl"></i></button>
             </div>
-            
             <div class="space-y-4 text-sm">
                 <div class="p-3 bg-indigo-50 rounded-lg border border-indigo-100">
                     <label class="block text-xs font-bold text-indigo-800 uppercase mb-1">🔑 កូនសោរ Sync (Sync Key)</label>
                     <p class="text-[11px] text-indigo-600 mb-2">វាយពាក្យសម្ងាត់ដូចគ្នាទាំងនៅលើទូរសព្ទ និងកុំព្យូទ័រ ដើម្បីឲ្យទិន្នន័យរត់ចូលគ្នាតែមួយ។</p>
                     <input type="text" id="syncKeyInput" placeholder="ឧ. Phiroun2222" class="w-full border border-indigo-300 rounded p-2 text-sm focus:border-indigo-500 outline-none font-bold uppercase tracking-wider text-indigo-900">
                 </div>
-
-                <div class="p-3 bg-slate-50 rounded-lg border border-slate-200">
-                    <label class="block text-xs font-bold text-slate-700 uppercase mb-1">⚙️ Firebase Configuration (សម្រាប់ប្រើជា App ផ្ទាល់ខ្លួន)</label>
-                    <p class="text-[11px] text-slate-500 mb-2">ប្រសិនបើបងចង់ប្តូរទៅកាន់ Firebase ផ្សេងទៀត សូមយកកូដ Config មកបិទភ្ជាប់ទីនេះ។ បើមិនដូរទេ ទុកចោលទទេក៏បាន!</p>
-                    <textarea id="firebaseConfigInput" rows="4" placeholder='{"apiKey": "...", "authDomain": "...", ...}' class="w-full border border-slate-300 rounded p-1.5 text-[11px] focus:border-slate-500 outline-none font-mono"></textarea>
-                </div>
             </div>
-
             <div class="flex gap-3 justify-center mt-5">
                 <button onclick="closeSyncSettingsModal()" class="px-4 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 font-medium transition-colors flex-1">បោះបង់</button>
                 <button onclick="saveSyncSettings()" class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-medium transition-colors flex-1">រក្សាទុក & Sync</button>
@@ -248,6 +266,7 @@
         </div>
     </div>
 
+    <!-- SCRIPTS (Global Firebase Version - គ្មាន AI) -->
     <script>
         let firebaseConfig = {
             apiKey: "AIzaSyD-OPUMwOgo7YvwqZ_X8gOvz-Q7e5f-F3w",
@@ -261,13 +280,7 @@
         
         const appId = 'trading-tracker-app';
         const LOCAL_STORAGE_KEY = 'trading_journal_pro_backup';
-        const CUSTOM_CONFIG_KEY = 'custom_firebase_config';
         const SYNC_KEY_STORE = 'custom_sync_key';
-
-        const savedCustomConfig = localStorage.getItem(CUSTOM_CONFIG_KEY);
-        if (savedCustomConfig) {
-            try { firebaseConfig = JSON.parse(savedCustomConfig); } catch(e) { console.error("Firebase config validation error", e); }
-        }
 
         let syncKey = localStorage.getItem(SYNC_KEY_STORE) || 'PHIROUN2222';
         let currentUserId = null, db, auth;
@@ -317,7 +330,6 @@
 
         window.openSyncSettingsModal = function() {
             document.getElementById('syncKeyInput').value = syncKey;
-            document.getElementById('firebaseConfigInput').value = savedCustomConfig || '';
             const modal = document.getElementById('syncSettingsModal');
             modal.classList.add('active');
             setTimeout(() => modal.firstElementChild.classList.remove('scale-95'), 10);
@@ -331,25 +343,11 @@
 
         window.saveSyncSettings = function() {
             const keyVal = document.getElementById('syncKeyInput').value.trim();
-            const configVal = document.getElementById('firebaseConfigInput').value.trim();
-
             if (keyVal) {
                 localStorage.setItem(SYNC_KEY_STORE, keyVal);
             } else {
                 localStorage.removeItem(SYNC_KEY_STORE);
             }
-
-            if (configVal) {
-                try {
-                    JSON.parse(configVal); 
-                    localStorage.setItem(CUSTOM_CONFIG_KEY, configVal);
-                } catch(e) {
-                    return window.showAlert("កូដ Firebase Config មិនត្រឹមត្រូវតាមទម្រង់ JSON ទេ!");
-                }
-            } else {
-                localStorage.removeItem(CUSTOM_CONFIG_KEY);
-            }
-
             window.showAlert("រក្សាទុកជោគជ័យ! កម្មវិធីនឹងដំណើរការការ Sync ឡើងវិញ។");
             setTimeout(() => { window.location.reload(); }, 1500);
         };
@@ -358,11 +356,6 @@
             loadLocalBackup();
             renderTable(); 
 
-            if (!firebaseConfig) {
-                updateStatus(false, "Offline Mode (Auto-Saved)");
-                return;
-            }
-            
             if (window.appState.trades.length === 0) {
                 document.getElementById('loadingOverlay').classList.remove('hidden');
             } else {
@@ -377,25 +370,10 @@
                 auth = firebase.auth(); 
                 db = firebase.firestore();
 
-                let authenticated = false;
-                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-                    try {
-                        await auth.signInWithCustomToken(__initial_auth_token);
-                        authenticated = true;
-                    } catch (err) {
-                        console.warn("បដិសេធ Custom Token:", err);
-                    }
-                }
-
-                if (!authenticated) {
-                    try {
-                        await auth.signInAnonymously();
-                    } catch (err) {
-                        console.error("កំហុសពេលប្រើ Anonymous Auth:", err);
-                        if (err.code === 'auth/configuration-not-found' || err.code === 'auth/operation-not-allowed') {
-                            window.showAlert("⚠️ សូមចូលទៅកាន់ Firebase Console -> Authentication -> Sign-in method រួចបើក (Enable) 'Anonymous' ជាមុនសិន។");
-                        }
-                    }
+                try {
+                    await auth.signInAnonymously();
+                } catch (err) {
+                    console.error("កំហុស:", err);
                 }
 
                 auth.onAuthStateChanged((user) => {
@@ -548,7 +526,6 @@
                 lotSize: lastTrade ? lastTrade.lotSize : 0.05,
                 risk: 0, 
                 slPip: lastTrade ? lastTrade.slPip : 100, 
-                // កំណត់យក R:R ពី Global Settings ធ្វើជាលំនាំដើម
                 rr: window.appState.settings.rr || 1, 
                 result: 'Pending', 
                 withdraw: 0, 
@@ -611,7 +588,6 @@
 
             window.appState.trades.forEach((trade, index) => {
                 const calculatedRisk = (trade.lotSize * trade.slPip * pipValue);
-                // ប្រសិនបើអត់ទាន់មាន rr ផ្ទាល់ខ្លួនទេ យក Global RR មកប្រើ
                 const currentTradeRR = trade.rr !== undefined ? parseFloat(trade.rr) : rr;
                 const profitAmount = calculatedRisk * currentTradeRR;
                 
@@ -657,13 +633,11 @@
                     <td class="p-2 text-center align-top pt-2"><input type="number" step="0.01" value="${trade.lotSize}" class="clean-input text-center font-medium" onchange="window.updateTradeData('${trade.id}', 'lotSize', this.value)"></td>
                     <td class="p-2 text-center align-top pt-3"><div class="text-slate-600 font-medium">${calculatedRisk.toFixed(2)}</div></td>
                     <td class="p-2 text-center align-top pt-2"><input type="number" value="${trade.slPip}" class="clean-input text-center" onchange="window.updateTradeData('${trade.id}', 'slPip', this.value)"></td>
-                    
                     <td class="p-2 text-center align-top pt-2">
                         <div class="flex items-center justify-center text-xs font-medium text-slate-500">
                             1:<input type="number" step="0.1" value="${currentTradeRR}" class="clean-input text-center w-12 ml-1 bg-white border border-slate-200 text-indigo-600 font-bold" onchange="window.updateTradeData('${trade.id}', 'rr', this.value)">
                         </div>
                     </td>
-
                     <td class="p-2 text-center align-top pt-2">
                         <select class="p-1.5 border rounded-md outline-none cursor-pointer w-full text-center appearance-none ${resultTextClass} transition-colors shadow-sm" onchange="window.updateTradeData('${trade.id}', 'result', this.value)">
                             <option value="Pending" ${trade.result === 'Pending' ? 'selected' : ''}>-- រង់ចាំ --</option>
@@ -808,7 +782,7 @@
                     }
 
                     if (R > 0) {
-                        if (C === 9) { // Result Column (ឥឡូវនៅលេខរៀងទី 9 ព្រោះមាន R:R ថែមមុខ)
+                        if (C === 9) { 
                             if (ws[cellRef].v === 'Win') { ws[cellRef].s.font.color = { rgb: "15803D" }; ws[cellRef].s.font.bold = true; } 
                             else if (ws[cellRef].v === 'Loss') { ws[cellRef].s.font.color = { rgb: "B91C1C" }; ws[cellRef].s.font.bold = true; }
                             else if (ws[cellRef].v === 'BE') { ws[cellRef].s.font.color = { rgb: "D97706" }; ws[cellRef].s.font.bold = true; }
