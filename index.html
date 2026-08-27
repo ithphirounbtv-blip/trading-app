@@ -12,6 +12,7 @@
 
     <!-- កូដសម្រាប់ចុះឈ្មោះ Service Worker ឱ្យលោតប៊ូតុង Install -->
     <script>
+        // ត្រួតពិនិត្យ protocol ដើម្បីចៀសវាង error នៅក្នុង blob: ឬ file: 
         if ('serviceWorker' in navigator && (window.location.protocol === 'https:' || window.location.protocol === 'http:')) {
             window.addEventListener('load', () => {
                 navigator.serviceWorker.register('./sw.js')
@@ -29,6 +30,7 @@
 
     <!-- ប្រើប្រាស់ Firebase ជំនាន់ 8 (Compat) -->
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
 
     <style>
@@ -281,7 +283,7 @@
         const SYNC_KEY_STORE = 'custom_sync_key';
 
         let syncKey = localStorage.getItem(SYNC_KEY_STORE) || 'PHIROUN2222';
-        let currentUserId = null, db;
+        let currentUserId = null, db, auth;
 
         window.appState = { trades: [], settings: { accountSize: 10000, rr: 1, pipValue: 10 } };
         
@@ -365,11 +367,23 @@
                 if (!firebase.apps.length) {
                     firebase.initializeApp(firebaseConfig);
                 }
+                auth = firebase.auth(); 
                 db = firebase.firestore();
-                
-                // កំណត់ currentUserId ដោយផ្ទាល់តាម Sync Key ដោយមិនបាច់ Login 
-                currentUserId = syncKey ? syncKey.toLowerCase().replace(/[^a-z0-9]/g, '_') : 'guest_user';
-                setupRealtimeListeners();
+
+                try {
+                    await auth.signInAnonymously();
+                } catch (err) {
+                    console.error("កំហុស:", err);
+                }
+
+                auth.onAuthStateChanged((user) => {
+                    if (user) {
+                        currentUserId = syncKey ? syncKey.toLowerCase().replace(/[^a-z0-9]/g, '_') : user.uid;
+                        setupRealtimeListeners();
+                    } else {
+                        currentUserId = null;
+                    }
+                });
 
             } catch (error) { 
                 console.error("Firebase connection error", error);
@@ -636,7 +650,7 @@
                     <td class="p-2 text-center align-top pt-2"><input type="number" value="${trade.withdraw || ''}" placeholder="0" class="clean-input text-center text-orange-600" onchange="window.updateTradeData('${trade.id}', 'withdraw', this.value)"></td>
                     <td class="p-2 align-top pt-2">${chartElement}</td>
                     <td class="p-2 align-top pt-2">
-                        <textarea placeholder="វាយចំណាំនៅទីនេះ..." class="clean-input text-slate-600 text-xs w-full" oninput="window.updateTradeData('${trade.id}', 'remark', this.value); window.autoExpandTextarea(this)">${trade.remark || ''}</textarea>
+                        <textarea placeholder="វាយចំណាំនៅទីនេះ..." class="clean-input text-slate-600 text-xs w-full" onchange="window.updateTradeData('${trade.id}', 'remark', this.value)" oninput="window.autoExpandTextarea(this)">${trade.remark || ''}</textarea>
                     </td>
                     <td class="p-2 text-center align-top pt-2">
                         <button onclick="window.deleteTrade('${trade.id}')" class="text-slate-400 hover:text-red-600 p-1.5 rounded-md hover:bg-red-50 transition-all" title="លុបជួរនេះ">
@@ -785,11 +799,6 @@
             XLSX.utils.book_append_sheet(wb, ws, "Trading Journal");
             XLSX.writeFile(wb, `Trading_Journal_${new Date().toLocaleString('default', { month: 'short' })}_${new Date().getFullYear()}.xlsx`);
         };
-
-        // បង្ខំឱ្យ Save រាល់ទិន្នន័យទាំងអស់មុនពេលបិទផ្ទាំងលើ PC
-        window.addEventListener('beforeunload', () => {
-            saveLocalBackup();
-        });
 
         initApp();
     </script>
