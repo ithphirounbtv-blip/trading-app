@@ -370,6 +370,12 @@
                 auth = firebase.auth(); 
                 db = firebase.firestore();
 
+                // ---------- កូដបន្ថែមថ្មីសម្រាប់ជួសជុលបញ្ហាលើ Chrome/Edge ----------
+                db.settings({
+                    experimentalForceLongPolling: true
+                });
+                // ----------------------------------------------------------------------
+
                 try {
                     await auth.signInAnonymously();
                 } catch (err) {
